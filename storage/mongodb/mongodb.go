@@ -1,4 +1,4 @@
-package main
+package mongodb
 
 import (
 	"context"
@@ -11,12 +11,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var db *mongo.Collection
-var mongoClient *mongo.Client
+type MongoDB struct {
+	client     *mongo.Client
+	collection *mongo.Collection
+}
 
-// ConnectDB initializes the connection to MongoDB
-func ConnectDB() {
-	// Load environment variables
+func NewMongoDB() (*MongoDB, error) {
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
 	}
@@ -28,7 +28,7 @@ func ConnectDB() {
 	clientOptions := options.Client().ApplyURI(mongoURI)
 	client, err := mongo.NewClient(clientOptions)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -36,22 +36,22 @@ func ConnectDB() {
 
 	err = client.Connect(ctx)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	mongoClient = client
-	db = client.Database(dbName).Collection(collectionName)
-	log.Println("Connected to MongoDB!")
+	collection := client.Database(dbName).Collection(collectionName)
+	return &MongoDB{
+		client:     client,
+		collection: collection,
+	}, nil
 }
 
-// CloseDB closes the MongoDB connection
-func CloseDB() {
+func (m *MongoDB) Close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	return m.client.Disconnect(ctx)
+}
 
-	if err := mongoClient.Disconnect(ctx); err != nil {
-		log.Println("Error disconnecting from MongoDB:", err)
-	} else {
-		log.Println("Disconnected from MongoDB!")
-	}
+func (m *MongoDB) Collection() *mongo.Collection {
+	return m.collection
 }
