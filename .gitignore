@@ -1,0 +1,42 @@
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Compiled object files
+*.o
+*.a
+*.out
+
+# Build directory
+/build/
+bin/
+
+# Go modules
+/go.sum
+/go.mod
+
+# Dependency directories (if any)
+vendor/
+
+# Logs and debug output
+*.log
+*.trace
+
+# Environment variable files
+.env
+
+# Database-related files
+*.db
+*.sqlite
+
+# IDE and editor-specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# System files
+.DS_Store
+Thumbs.db

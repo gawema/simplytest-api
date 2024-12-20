@@ -1,36 +1,80 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
-	"strconv"
+	"os"
+	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // Medication defines the data structure for a medication item
 // using struct tags for JSON marshaling/unmarshaling
 type Medication struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	ID          primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	Name        string             `json:"name" bson:"name"`
+	Description string             `json:"description" bson:"description"`
 }
 
-// medications is an in-memory slice that stores Medication instances
-// TODO: This is not thread-safe and would need mutex protection for concurrent access
-var medications = []Medication{
-	{ID: 1, Name: "Paracetamol", Description: "Pain reliever and fever reducer."},
-	{ID: 2, Name: "Ibuprofen", Description: "Reduces inflammation and treats pain."},
-}
+var db *mongo.Collection
 
-// nextID is used for auto-incrementing medication IDs
-// TODO: In production, this should be handled by a database
-var nextID = 3
+// connectDB initializes the connection to MongoDB
+func connectDB() {
+	// Load environment variables
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	mongoURI := os.Getenv("MONGODB_URI")
+	dbName := os.Getenv("MONGODB_DB_NAME")
+	collectionName := os.Getenv("MONGODB_COLLECTION")
+
+	clientOptions := options.Client().ApplyURI(mongoURI)
+	client, err := mongo.NewClient(clientOptions)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err = client.Connect(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db = client.Database(dbName).Collection(collectionName)
+	log.Println("Connected to MongoDB!")
+}
 
 // getMedications is an http.HandlerFunc that returns all medications
 // as a JSON array in the response body
 func getMedications(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := db.Find(ctx, bson.M{})
+	if err != nil {
+		http.Error(w, "Failed to fetch medications", http.StatusInternalServerError)
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var medications []Medication
+	if err = cursor.All(ctx, &medications); err != nil {
+		http.Error(w, "Failed to parse medications", http.StatusInternalServerError)
+		return
+	}
+
 	json.NewEncoder(w).Encode(medications)
 }
 
@@ -39,23 +83,23 @@ func getMedications(w http.ResponseWriter, r *http.Request) {
 func getMedicationByID(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r)
-	// Convert string ID to int using strconv package
-	id, err := strconv.Atoi(params["id"])
+	id, err := primitive.ObjectIDFromHex(params["id"])
 	if err != nil {
 		http.Error(w, "Invalid medication ID", http.StatusBadRequest)
 		return
 	}
 
-	// Linear search through medications slice
-	// TODO:In a real app, this would be a database query
-	for _, medication := range medications {
-		if medication.ID == id {
-			json.NewEncoder(w).Encode(medication)
-			return
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var medication Medication
+	err = db.FindOne(ctx, bson.M{"_id": id}).Decode(&medication)
+	if err != nil {
+		http.Error(w, "Medication not found", http.StatusNotFound)
+		return
 	}
 
-	http.Error(w, "Medication not found", http.StatusNotFound)
+	json.NewEncoder(w).Encode(medication)
 }
 
 // createMedication is an http.HandlerFunc that adds a new medication
@@ -69,16 +113,24 @@ func createMedication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Append to medications slice and increment nextID
-	newMedication.ID = nextID
-	nextID++
-	medications = append(medications, newMedication)
+	newMedication.ID = primitive.NewObjectID()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := db.InsertOne(ctx, newMedication)
+	if err != nil {
+		http.Error(w, "Failed to create medication", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(newMedication)
 }
 
 func main() {
-	// Create a new gorilla/mux router instance
+	// Connect to the database
+	connectDB()
+
 	r := mux.NewRouter()
 
 	// Register route handlers with HTTP methods
@@ -87,6 +139,10 @@ func main() {
 	r.HandleFunc("/medications/{id}", getMedicationByID).Methods("GET")
 	r.HandleFunc("/medications", createMedication).Methods("POST")
 
-	// Start HTTP server with the router as handler
-	http.ListenAndServe(":8080", r)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Printf("Server starting on port %s", port)
+	http.ListenAndServe(":"+port, r)
 }
