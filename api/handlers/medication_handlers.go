@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -116,6 +117,9 @@ func (h *MedicationHandler) CreateMedication(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Let's add some debug logging
+	fmt.Printf("Received medication: %+v\n", newMedication)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -164,6 +168,8 @@ func (h *MedicationHandler) UpdateMedication(w http.ResponseWriter, r *http.Requ
 		"$set": bson.M{
 			"name":        medication.Name,
 			"description": medication.Description,
+			"price":       medication.Price,
+			"imageUrl":    medication.ImageURL,
 		},
 	}
 
