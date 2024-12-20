@@ -26,8 +26,20 @@ func NewMedicationHandler(collection *mongo.Collection) *MedicationHandler {
 	}
 }
 
+// enableCORS adds CORS headers to the response
+func enableCORS(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*") // For development. In production, set to your Next.js domain
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+}
+
 // GetMedications handles GET requests to fetch all medications
 func (h *MedicationHandler) GetMedications(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 
 	// Create context with timeout
@@ -55,6 +67,11 @@ func (h *MedicationHandler) GetMedications(w http.ResponseWriter, r *http.Reques
 
 // GetMedicationByID handles GET requests to fetch a single medication by ID
 func (h *MedicationHandler) GetMedicationByID(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 
 	// Get ID from URL parameters
@@ -85,6 +102,11 @@ func (h *MedicationHandler) GetMedicationByID(w http.ResponseWriter, r *http.Req
 
 // CreateMedication handles POST requests to create a new medication
 func (h *MedicationHandler) CreateMedication(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 
 	// Decode the request body into a Medication struct
@@ -115,6 +137,11 @@ func (h *MedicationHandler) CreateMedication(w http.ResponseWriter, r *http.Requ
 
 // UpdateMedication handles PUT requests to update a medication
 func (h *MedicationHandler) UpdateMedication(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(params["id"])
@@ -157,6 +184,11 @@ func (h *MedicationHandler) UpdateMedication(w http.ResponseWriter, r *http.Requ
 
 // DeleteMedication handles DELETE requests to delete a medication
 func (h *MedicationHandler) DeleteMedication(w http.ResponseWriter, r *http.Request) {
+	enableCORS(w)
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r)
 	id, err := primitive.ObjectIDFromHex(params["id"])
