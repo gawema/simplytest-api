@@ -13,4 +13,6 @@ func SetupRoutes(r *mux.Router, collection *mongo.Collection) {
 	r.HandleFunc("/medications", medicationHandler.GetMedications).Methods("GET")
 	r.HandleFunc("/medications/{id}", medicationHandler.GetMedicationByID).Methods("GET")
 	r.HandleFunc("/medications", medicationHandler.CreateMedication).Methods("POST")
+	r.HandleFunc("/medications/{id}", medicationHandler.UpdateMedication).Methods("PUT")
+	r.HandleFunc("/medications/{id}", medicationHandler.DeleteMedication).Methods("DELETE")
 }

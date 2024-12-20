@@ -8,6 +8,7 @@ import (
 
 	"simplytest-api/storage/models"
 
+	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -45,7 +46,29 @@ func (h *MedicationHandler) GetMedications(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *MedicationHandler) GetMedicationByID(w http.ResponseWriter, r *http.Request) {
-	// ... similar to before but using h.collection ...
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		http.Error(w, "Invalid medication ID", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var medication models.Medication
+	err = h.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&medication)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "Medication not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Failed to fetch medication", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(medication)
 }
 
 func (h *MedicationHandler) CreateMedication(w http.ResponseWriter, r *http.Request) {
@@ -73,4 +96,71 @@ func (h *MedicationHandler) CreateMedication(w http.ResponseWriter, r *http.Requ
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(newMedication)
+}
+
+func (h *MedicationHandler) UpdateMedication(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		http.Error(w, "Invalid medication ID", http.StatusBadRequest)
+		return
+	}
+
+	var medication models.Medication
+	if err := json.NewDecoder(r.Body).Decode(&medication); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	filter := bson.M{"_id": id}
+	update := bson.M{
+		"$set": bson.M{
+			"name":        medication.Name,
+			"description": medication.Description,
+		},
+	}
+
+	result, err := h.collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		http.Error(w, "Failed to update medication", http.StatusInternalServerError)
+		return
+	}
+
+	if result.MatchedCount == 0 {
+		http.Error(w, "Medication not found", http.StatusNotFound)
+		return
+	}
+
+	medication.ID = id
+	json.NewEncoder(w).Encode(medication)
+}
+
+func (h *MedicationHandler) DeleteMedication(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	id, err := primitive.ObjectIDFromHex(params["id"])
+	if err != nil {
+		http.Error(w, "Invalid medication ID", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result, err := h.collection.DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil {
+		http.Error(w, "Failed to delete medication", http.StatusInternalServerError)
+		return
+	}
+
+	if result.DeletedCount == 0 {
+		http.Error(w, "Medication not found", http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
